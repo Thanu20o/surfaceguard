@@ -1,0 +1,45 @@
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: surfaceguard
+      POSTGRES_USER: surfaceguard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+    volumes:
+      - surfaceguard-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U surfaceguard -d surfaceguard"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://surfaceguard:${POSTGRES_PASSWORD:-local-development-only}@database:5432/surfaceguard
+      ALLOWED_ORIGINS: http://localhost:5173
+      REQUEST_TIMEOUT_SECONDS: 4
+      REQUEST_INTERVAL_SECONDS: 0.2
+      CT_MIN_INTERVAL_SECONDS: 10
+      MAX_RESPONSE_BYTES: 65536
+      MAX_HOSTS_PER_SCAN: 20
+      ALLOW_PRIVATE_TARGETS: "false"
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8001:8000"
+
+  frontend:
+    build: ./frontend
+    environment:
+      VITE_API_URL: http://localhost:8001/api
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:5173:5173"
+
+volumes:
+  surfaceguard-postgres:
